@@ -39,7 +39,7 @@ jobs:
       - run: pnpm build
 
   frontend:
-    name: Frontend (lint, build)
+    name: Frontend (lint, test, build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -61,6 +61,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - run: pnpm test
       - run: pnpm build
 
   docker:
