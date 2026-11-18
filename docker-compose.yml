@@ -1,0 +1,27 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    image: acadpath-backend:latest
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL}
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Browser-facing URL of the API (baked in at build time)
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    image: acadpath-frontend:latest
+    restart: unless-stopped
+    environment:
+      # Server-side (RSC / route handlers) calls go over the compose network
+      API_URL: http://backend:4000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
