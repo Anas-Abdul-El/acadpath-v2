@@ -23,7 +23,8 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm build
+# public/ may be absent (git doesn't track empty dirs); ensure it exists for the COPY below
+RUN mkdir -p public && pnpm build
 
 # ---- runner (standalone output) ----
 FROM node:${NODE_VERSION}-alpine AS runner
