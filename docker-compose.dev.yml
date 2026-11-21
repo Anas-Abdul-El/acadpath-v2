@@ -1,0 +1,69 @@
+# Development override with Compose Watch (https://docs.docker.com/compose/file-watch/).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch
+#
+# Builds the `dev` stage of each Dockerfile (nest start --watch / next dev) instead of the
+# production image. Source edits are synced into the running containers and picked up by the
+# dev servers' own reload; dependency changes rebuild the image.
+services:
+  backend:
+    build:
+      target: dev
+    image: acadpath-backend:dev
+    environment:
+      NODE_ENV: development
+    develop:
+      watch:
+        # Source code: copied into the container, nest --watch recompiles
+        - action: sync
+          path: ./backend/src
+          target: /app/src
+          initial_sync: true
+        # Compiler / CLI config: sync, then restart the dev server
+        - action: sync+restart
+          path: ./backend/tsconfig.json
+          target: /app/tsconfig.json
+        - action: sync+restart
+          path: ./backend/tsconfig.build.json
+          target: /app/tsconfig.build.json
+        - action: sync+restart
+          path: ./backend/nest-cli.json
+          target: /app/nest-cli.json
+        # Dependencies can't be added on the fly: rebuild the image
+        - action: rebuild
+          path: ./backend/package.json
+        - action: rebuild
+          path: ./backend/pnpm-lock.yaml
+
+  frontend:
+    build:
+      target: dev
+    image: acadpath-frontend:dev
+    environment:
+      NODE_ENV: development
+      # next dev reads this at runtime, no rebuild needed
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    develop:
+      watch:
+        # Source code and static files: Next.js hot-reloads them
+        - action: sync
+          path: ./frontend/src
+          target: /app/src
+          initial_sync: true
+        - action: sync
+          path: ./frontend/public
+          target: /app/public
+        # Next.js config: sync, then restart the dev server
+        - action: sync+restart
+          path: ./frontend/next.config.ts
+          target: /app/next.config.ts
+        - action: sync+restart
+          path: ./frontend/tsconfig.json
+          target: /app/tsconfig.json
+        # Dependencies can't be added on the fly: rebuild the image
+        - action: rebuild
+          path: ./frontend/package.json
+        - action: rebuild
+          path: ./frontend/pnpm-lock.yaml
+        - action: rebuild
+          path: ./frontend/pnpm-workspace.yaml

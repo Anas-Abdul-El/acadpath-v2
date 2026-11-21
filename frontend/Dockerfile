@@ -16,6 +16,17 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
+# ---- dev: next dev, used by docker-compose.dev.yml (Compose Watch syncs src/) ----
+FROM deps AS dev
+ENV NODE_ENV=development \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --chown=node:node . .
+# next dev writes .next/ into /app, so the node user must own it
+RUN mkdir -p public && chown node:node /app /app/public
+USER node
+EXPOSE 3000
+CMD ["node_modules/.bin/next", "dev", "--hostname", "0.0.0.0"]
+
 # ---- build ----
 FROM deps AS build
 COPY . .
