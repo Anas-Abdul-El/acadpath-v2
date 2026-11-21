@@ -16,6 +16,17 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
+# ---- dev: next dev, used by docker-compose.dev.yml (Compose Watch syncs src/) ----
+FROM deps AS dev
+ENV NODE_ENV=development \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --chown=node:node . .
+# next dev writes .next/ into /app, so the node user must own it
+RUN mkdir -p public && chown node:node /app /app/public
+USER node
+EXPOSE 3000
+CMD ["node_modules/.bin/next", "dev", "--hostname", "0.0.0.0"]
+
 # ---- build ----
 FROM deps AS build
 COPY . .
@@ -23,7 +34,8 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm build
+# public/ may be absent (git doesn't track empty dirs); ensure it exists for the COPY below
+RUN mkdir -p public && pnpm build
 
 # ---- runner (standalone output) ----
 FROM node:${NODE_VERSION}-alpine AS runner

@@ -16,6 +16,17 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
+# ---- dev: watch mode, used by docker-compose.dev.yml (Compose Watch syncs src/) ----
+FROM deps AS dev
+ENV NODE_ENV=development
+COPY --chown=node:node . .
+# nest writes dist/ into /app, so the node user must own it
+RUN chown node:node /app
+USER node
+ENV PORT=4000
+EXPOSE 4000
+CMD ["node_modules/.bin/nest", "start", "--watch"]
+
 # ---- build: compile TypeScript ----
 FROM deps AS build
 COPY . .
