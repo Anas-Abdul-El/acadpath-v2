@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "prisma:generate": "prisma generate",
+    "browser:install": "playwright install --only-shell chromium",
     "build": "prisma generate && nest build",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
