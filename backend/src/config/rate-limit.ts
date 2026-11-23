@@ -4,7 +4,18 @@
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
 /** Every route: 100 requests per IP per 15 minutes (v1's global limiter). */
-export const GLOBAL_RATE_LIMIT = { ttl: FIFTEEN_MINUTES_MS, limit: 100 };
+export const GLOBAL_RATE_LIMIT = {
+  name: 'default',
+  ttl: FIFTEEN_MINUTES_MS,
+  limit: 100,
+};
+
+/** @Polled() routes only: 600 per user per 15 minutes, about one every 1.5 s (v1: pollLimiter). */
+export const POLL_RATE_LIMIT = {
+  name: 'poll',
+  ttl: FIFTEEN_MINUTES_MS,
+  limit: 600,
+};
 
 /** Login and sign-up: 10 attempts per IP per 15 minutes, to slow down password guessing. */
 export const AUTH_RATE_LIMIT = { ttl: FIFTEEN_MINUTES_MS, limit: 10 };
