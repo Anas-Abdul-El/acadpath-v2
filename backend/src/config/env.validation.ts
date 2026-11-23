@@ -4,6 +4,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   MinLength,
@@ -42,6 +43,22 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   CORS_ORIGIN?: string;
+
+  /** OpenRouter API key (v1: config/ai.ts). Only the server ever sees it. */
+  @IsString()
+  @MinLength(1)
+  OPENROUTER_KEY: string;
+
+  /** Model ID on OpenRouter; v1's default unless overridden. */
+  @IsString()
+  @MinLength(1)
+  OPENROUTER_MODEL = 'nvidia/nemotron-3-ultra-550b-a55b:free';
+
+  /** Redis for the BullMQ job queues, e.g. redis://localhost:6379. */
+  @Matches(/^rediss?:\/\/.+/, {
+    message: 'REDIS_URL must be a redis:// or rediss:// URL',
+  })
+  REDIS_URL: string;
 }
 
 export function validateEnv(

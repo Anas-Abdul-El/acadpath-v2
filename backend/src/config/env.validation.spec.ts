@@ -7,6 +7,8 @@ const validEnv = {
   DATABASE_URL: 'postgresql://user:password@localhost:5432/acadpath',
   ACCESS_TOKEN_SECRET: accessSecret,
   REFRESH_TOKEN_SECRET: refreshSecret,
+  OPENROUTER_KEY: 'sk-or-test',
+  REDIS_URL: 'redis://localhost:6379',
 };
 
 describe('validateEnv', () => {
@@ -27,15 +29,18 @@ describe('validateEnv', () => {
     expect(env.PORT).toBe(3000);
   });
 
-  it.each(['DATABASE_URL', 'ACCESS_TOKEN_SECRET', 'REFRESH_TOKEN_SECRET'])(
-    'refuses to start without %s',
-    (name) => {
-      const env: Record<string, unknown> = { ...validEnv };
-      delete env[name];
+  it.each([
+    'DATABASE_URL',
+    'ACCESS_TOKEN_SECRET',
+    'REFRESH_TOKEN_SECRET',
+    'OPENROUTER_KEY',
+    'REDIS_URL',
+  ])('refuses to start without %s', (name) => {
+    const env: Record<string, unknown> = { ...validEnv };
+    delete env[name];
 
-      expect(() => validateEnv(env)).toThrow(name);
-    },
-  );
+    expect(() => validateEnv(env)).toThrow(name);
+  });
 
   it('rejects a token secret shorter than 32 characters', () => {
     expect(() =>
@@ -53,5 +58,24 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...validEnv, NODE_ENV: 'staging' })).toThrow(
       'NODE_ENV',
     );
+  });
+
+  it('defaults the AI model to the one v1 used', () => {
+    expect(validateEnv(validEnv).OPENROUTER_MODEL).toBe(
+      'nvidia/nemotron-3-ultra-550b-a55b:free',
+    );
+  });
+
+  it('accepts a different AI model from the environment', () => {
+    expect(
+      validateEnv({ ...validEnv, OPENROUTER_MODEL: 'other/model' })
+        .OPENROUTER_MODEL,
+    ).toBe('other/model');
+  });
+
+  it('rejects a REDIS_URL that is not a redis:// URL', () => {
+    expect(() =>
+      validateEnv({ ...validEnv, REDIS_URL: 'http://localhost:6379' }),
+    ).toThrow('REDIS_URL');
   });
 });

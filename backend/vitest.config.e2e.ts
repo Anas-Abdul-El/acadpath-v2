@@ -15,6 +15,9 @@ export default defineConfig({
       DATABASE_URL: 'postgresql://test:test@localhost:5432/acadpath_test',
       ACCESS_TOKEN_SECRET: 'test-access-secret-that-is-at-least-32-chars',
       REFRESH_TOKEN_SECRET: 'test-refresh-secret-that-is-at-least-32-chars',
+      OPENROUTER_KEY: 'test-key-never-used',
+      // Never connected to: e2e tests replace the queue and the worker with fakes.
+      REDIS_URL: 'redis://localhost:6379',
     },
   },
 });
