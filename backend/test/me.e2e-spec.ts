@@ -9,6 +9,9 @@ import { admin, computerScience, liu, student } from './fakes/me-fixtures.js';
 import { InMemoryMeRepository } from './fakes/in-memory-me.repository.js';
 import { InMemoryUniversityRepository } from './fakes/in-memory-university.repository.js';
 import { createTestApp, type TestApp } from './utils/create-test-app.js';
+import { InMemoryStorage } from './fakes/in-memory-storage.js';
+import { StorageService } from './../src/storage/storage.service.js';
+import { fileBytes } from './fixtures/files.js';
 
 const jwt = new JwtService();
 const tokenFor = (id: string, role: 'STUDENT' | 'ADMIN') =>
@@ -26,6 +29,7 @@ describe('Me routes (e2e)', () => {
   let repo: InMemoryMeRepository;
   let universities: InMemoryUniversityRepository;
   let catalogQueue: TestApp['catalogQueue'];
+  let storage: InMemoryStorage;
 
   beforeEach(async () => {
     repo = new InMemoryMeRepository();
@@ -34,10 +38,12 @@ describe('Me routes (e2e)', () => {
     repo.add(admin('a1'));
 
     universities = new InMemoryUniversityRepository();
+    storage = new InMemoryStorage();
     ({ app, catalogQueue } = await createTestApp({
       overrides: [
         [MeRepository, repo],
         [UniversityRepository, universities],
+        [StorageService, storage],
       ],
     }));
   });
@@ -384,6 +390,105 @@ describe('Me routes (e2e)', () => {
         .put('/university')
         .send({ ...body, country: "Côte d'Ivoire", city: 'Saint-Louis (Nord)' })
         .expect(200);
+    });
+  });
+
+  describe('/api/me/university/sources', () => {
+    const body = {
+      name: 'Lebanese International University',
+      country: 'Lebanon',
+      city: 'Beirut',
+      major: 'Computer Science',
+    };
+    const uploadAs = (id: string, role: 'STUDENT' | 'ADMIN' = 'STUDENT') =>
+      as(id, role).post('/university/sources');
+
+    it('answers 422 before a university and major are selected', async () => {
+      const res = await uploadAs('s1')
+        .attach('files', fileBytes.pdf(), {
+          filename: 'plan.pdf',
+          contentType: 'application/pdf',
+        })
+        .expect(422);
+
+      expect(res.body).toEqual({
+        error: { message: 'Select your university first' },
+      });
+      await as('s1').get('/university/sources').expect(422);
+    });
+
+    describe('after selecting a university', () => {
+      beforeEach(async () => {
+        await as('s1').put('/university').send(body).expect(200);
+        catalogQueue.add.mockClear();
+      });
+
+      it('stores the files, answers 202, and queues an uploaded-sources job', async () => {
+        const res = await uploadAs('s1')
+          .attach('files', fileBytes.pdf(), {
+            filename: 'plan.pdf',
+            contentType: 'application/pdf',
+          })
+          .attach('files', fileBytes.png(), {
+            filename: 'page.png',
+            contentType: 'image/png',
+          })
+          .expect(202);
+
+        expect(res.body.data).toEqual([
+          expect.objectContaining({
+            title: 'plan.pdf',
+            sourceType: 'PDF',
+            status: 'PROCESSING',
+          }),
+          expect.objectContaining({
+            title: 'page.png',
+            sourceType: 'IMAGE',
+            status: 'PROCESSING',
+          }),
+        ]);
+        expect(storage.objects.size).toBe(2);
+        expect(catalogQueue.add).toHaveBeenCalledWith(
+          'uploaded-sources',
+          expect.objectContaining({
+            majorName: 'Computer Science',
+            sourceIds: res.body.data.map((s: { id: string }) => s.id),
+          }),
+          expect.objectContaining({ attempts: 3 }),
+        );
+      });
+
+      it('lists the sources with their status, and polls are open to the student', async () => {
+        await uploadAs('s1')
+          .attach('files', fileBytes.pdf(), {
+            filename: 'plan.pdf',
+            contentType: 'application/pdf',
+          })
+          .expect(202);
+
+        const res = await as('s1').get('/university/sources').expect(200);
+        expect(res.body.data).toEqual([
+          expect.objectContaining({ title: 'plan.pdf', status: 'PROCESSING' }),
+        ]);
+      });
+
+      it('answers 400 (not 415, as in v1) for a file that is not really a PDF or image', async () => {
+        await uploadAs('s1')
+          .attach('files', fileBytes.exe(), {
+            filename: 'plan.pdf',
+            contentType: 'application/pdf',
+          })
+          .expect(400);
+      });
+
+      it('is for students only', async () => {
+        await uploadAs('a1', 'ADMIN')
+          .attach('files', fileBytes.pdf(), {
+            filename: 'plan.pdf',
+            contentType: 'application/pdf',
+          })
+          .expect(403);
+      });
     });
   });
 });
