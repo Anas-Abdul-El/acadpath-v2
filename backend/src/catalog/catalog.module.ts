@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module.js';
+import { StorageModule } from '../storage/storage.module.js';
 import { WebModule } from '../web/web.module.js';
 import { CatalogExtractor } from './catalog-extractor.service.js';
 import { CatalogProcessor } from './catalog.processor.js';
@@ -16,6 +17,7 @@ import { CatalogRepository } from './catalog.repository.js';
     BullModule.registerQueue({ name: CATALOG_QUEUE }),
     AiModule,
     WebModule,
+    StorageModule,
   ],
   providers: [
     CatalogQueue,
