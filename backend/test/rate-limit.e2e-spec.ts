@@ -55,8 +55,9 @@ describe('Rate limiting (e2e)', () => {
   });
 
   it('gives other routes the looser global limit of 100 per 15 minutes', async () => {
+    // refresh has no @Throttle override, so only the global limit applies.
     for (let i = 0; i < 11; i++) {
-      await request(app.getHttpServer()).get('/api').expect(200);
+      await request(app.getHttpServer()).post('/api/auth/refresh').expect(401);
     }
   });
 });
