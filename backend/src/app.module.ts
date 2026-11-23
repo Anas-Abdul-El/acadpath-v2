@@ -1,5 +1,5 @@
 import { BullModule } from '@nestjs/bullmq';
-import { Module } from '@nestjs/common';
+import { Module, type ExecutionContext } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, Reflector } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -9,11 +9,11 @@ import {
 } from './config/env.validation.js';
 import {
   GLOBAL_RATE_LIMIT,
-  POLL_RATE_LIMIT,
+  USER_RATE_LIMITS,
   RATE_LIMIT_MESSAGE,
 } from './config/rate-limit.js';
 import type { AuthenticatedRequest } from './auth/auth.types.js';
-import { POLLED_KEY } from './common/decorators/polled.decorator.js';
+import { USER_RATE_LIMIT_KEY } from './common/decorators/user-rate-limit.decorator.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { AccessTokenGuard } from './auth/guards/access-token.guard.js';
@@ -31,21 +31,27 @@ const reflector = new Reflector();
     // balancer they would need shared storage (e.g. Redis).
     ThrottlerModule.forRoot({
       throttlers: [
-        GLOBAL_RATE_LIMIT,
         {
-          ...POLL_RATE_LIMIT,
-          // Only routes marked @Polled() count against this limit...
-          skipIf: (context) =>
-            !reflector.get<boolean | undefined>(
-              POLLED_KEY,
+          ...GLOBAL_RATE_LIMIT,
+          // HTTP requests only: messages on an already-authenticated WebSocket (the
+          // portal sends one per click or key) would use the limit up in minutes.
+          skipIf: (context) => context.getType() !== 'http',
+        },
+        // One throttler per USER_RATE_LIMITS entry. Each counts only the routes marked
+        // @UserRateLimit(<its name>), per user: the access-token guard has run by now.
+        ...Object.entries(USER_RATE_LIMITS).map(([name, limit]) => ({
+          name,
+          ...limit,
+          skipIf: (context: ExecutionContext) =>
+            reflector.get<string | undefined>(
+              USER_RATE_LIMIT_KEY,
               context.getHandler(),
-            ),
-          // ...and it counts per user: the access-token guard has run by now.
+            ) !== name,
           getTracker: (req: Record<string, unknown>) => {
             const { user, ip } = req as unknown as AuthenticatedRequest;
             return user ? `user:${user.id}` : (ip ?? 'unknown');
           },
-        },
+        })),
       ],
       errorMessage: RATE_LIMIT_MESSAGE,
     }),

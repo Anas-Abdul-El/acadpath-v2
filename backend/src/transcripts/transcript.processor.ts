@@ -4,6 +4,7 @@ import { UnrecoverableError, type Job } from 'bullmq';
 import { AiInvalidResponseError, AiUnavailableError } from '../ai/ai.errors.js';
 import { AiService, type AiAttachment } from '../ai/ai.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { htmlToText } from '../web/html-to-text.js';
 import { pdfToText } from '../web/pdf-to-text.js';
 import { TranscriptDataDto } from './dto/transcript-data.dto.js';
 import { matchRecords } from './transcript-matching.js';
@@ -16,6 +17,9 @@ import {
   TranscriptRepository,
   type TranscriptJobContext,
 } from './transcript.repository.js';
+
+/** A portal page's text is cut to this many characters (v1: portalConfig.maxTextLength). */
+const MAX_PAGE_TEXT = 60_000;
 
 // Messages stored on the documents and shown to the student. Never raw error text.
 const ERRORS = {
@@ -115,6 +119,14 @@ export class TranscriptProcessor extends WorkerHost {
 
     for (const document of context.documents) {
       const data = await this.storage.get(document.fileUrl);
+      // A page captured from the student portal: its text, cut to a size the AI takes.
+      if (document.mimeType === 'text/html') {
+        documents.push({
+          fileName: document.fileName,
+          text: htmlToText(data.toString('utf8')).slice(0, MAX_PAGE_TEXT),
+        });
+        continue;
+      }
       if (document.mimeType === 'application/pdf') {
         let text: string;
         try {

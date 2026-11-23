@@ -1,4 +1,4 @@
-import { validateEnv } from './env.validation.js';
+import { parseList, validateEnv } from './env.validation.js';
 
 const accessSecret = 'a'.repeat(32);
 const refreshSecret = 'r'.repeat(32);
@@ -104,5 +104,56 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...validEnv, S3_ENDPOINT: 'seaweedfs:8333' }),
     ).toThrow('S3_ENDPOINT');
+  });
+
+  describe('student portal settings (v1: config/portal.ts)', () => {
+    it("defaults to LIU's portal", () => {
+      const env = validateEnv(validEnv);
+
+      expect(env.PORTAL_START_URL).toBe('https://syslbv4.liu.edu.lb/login/');
+      expect(env.PORTAL_ALLOWED_HOSTS).toBe('liu.edu.lb');
+      expect(env.PORTAL_MAX_SESSIONS).toBe(5);
+      expect(env.PORTAL_IDLE_MINUTES).toBe(10);
+    });
+
+    it.each([
+      ['PORTAL_START_URL', 'not a url'],
+      ['PORTAL_START_URL', 'ftp://liu.edu.lb/'],
+      ['PORTAL_MAX_SESSIONS', '0'],
+      ['PORTAL_MAX_SESSIONS', '51'],
+      ['PORTAL_IDLE_MINUTES', '121'],
+    ])('rejects %s=%s', (name, value) => {
+      expect(() => validateEnv({ ...validEnv, [name]: value })).toThrow(name);
+    });
+  });
+
+  describe('CORS_ORIGIN (also the origins allowed to open the portal WebSocket)', () => {
+    it('defaults to the local frontend', () => {
+      expect(validateEnv(validEnv).CORS_ORIGIN).toBe('http://localhost:3000');
+    });
+
+    it('rejects an origin with a path', () => {
+      expect(() =>
+        validateEnv({ ...validEnv, CORS_ORIGIN: 'https://acadpath.app/login' }),
+      ).toThrow('CORS_ORIGIN');
+    });
+
+    it('accepts several comma-separated origins', () => {
+      expect(
+        validateEnv({
+          ...validEnv,
+          CORS_ORIGIN: 'https://acadpath.app, http://localhost:3000',
+        }).CORS_ORIGIN,
+      ).toBe('https://acadpath.app, http://localhost:3000');
+    });
+  });
+
+  describe('parseList', () => {
+    it('splits on commas, trims, lowercases, drops empties and leading dots', () => {
+      expect(parseList(' LIU.edu.lb, .portal.example ,, ')).toEqual([
+        'liu.edu.lb',
+        'portal.example',
+      ]);
+    });
   });
 });

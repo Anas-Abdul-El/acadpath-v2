@@ -12,6 +12,18 @@ import {
   validateSync,
 } from 'class-validator';
 
+/** One or more origins ("https://app.example", "http://localhost:3000"), comma-separated. */
+const ORIGIN_LIST =
+  /^\s*https?:\/\/[a-z0-9.-]+(:\d+)?\s*(,\s*https?:\/\/[a-z0-9.-]+(:\d+)?\s*)*$/i;
+
+/** "a, B ,.c," → ["a", "b", "c"]: for the comma-separated settings. */
+export function parseList(value: string): string[] {
+  return value
+    .split(',')
+    .map((item) => item.trim().toLowerCase().replace(/^\.+/, ''))
+    .filter(Boolean);
+}
+
 const NODE_ENVS = ['development', 'production', 'test'] as const;
 
 /**
@@ -41,9 +53,40 @@ export class EnvironmentVariables {
   @MinLength(32, { message: '$property must be at least 32 characters' })
   REFRESH_TOKEN_SECRET: string;
 
-  @IsOptional()
+  /**
+   * Frontend origins, comma-separated (scheme + host + port, no path). Only these may
+   * open the portal WebSocket: browsers send Origin on WebSocket handshakes, and CORS
+   * doesn't cover WebSockets, so the server checks it itself.
+   */
+  @Matches(ORIGIN_LIST, {
+    message:
+      'CORS_ORIGIN must be comma-separated origins like https://app.example (no path)',
+  })
+  CORS_ORIGIN = 'http://localhost:3000';
+
+  // ─── Student-portal browser (v1: config/portal.ts). Defaults target LIU. ───
+
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  PORTAL_START_URL = 'https://syslbv4.liu.edu.lb/login/';
+
+  /** Comma-separated domains the portal browser may navigate to (subdomains included). */
   @IsString()
-  CORS_ORIGIN?: string;
+  @MinLength(1)
+  PORTAL_ALLOWED_HOSTS = 'liu.edu.lb';
+
+  /** Browsers open at once across all students (each costs about 150 MB of RAM). */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  PORTAL_MAX_SESSIONS = 5;
+
+  /** A portal session nobody is watching closes after this many minutes. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(120)
+  PORTAL_IDLE_MINUTES = 10;
 
   /** OpenRouter API key (v1: config/ai.ts). Only the server ever sees it. */
   @IsString()

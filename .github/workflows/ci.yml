@@ -38,6 +38,8 @@ jobs:
       - run: pnpm lint
       # oxlint applies lint rules but is not a full type check, and the build skips tests.
       - run: pnpm typecheck
+      # The student-portal tests drive a real headless Chromium.
+      - run: pnpm browser:install --with-deps
       - run: pnpm test
       - run: pnpm test:e2e
       - run: pnpm build

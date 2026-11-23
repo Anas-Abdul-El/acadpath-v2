@@ -16,7 +16,9 @@ export class InMemoryStorage implements Pick<
     contentType: string,
   ): string {
     const ext =
-      { 'application/pdf': 'pdf', 'image/png': 'png' }[contentType] ?? 'bin';
+      { 'application/pdf': 'pdf', 'image/png': 'png', 'text/html': 'html' }[
+        contentType
+      ] ?? 'bin';
     return `${folder}/${ownerId}/${randomUUID()}.${ext}`;
   }
 

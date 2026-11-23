@@ -30,6 +30,9 @@ export class AccessTokenGuard implements CanActivate {
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
+    // HTTP only. A WebSocket gateway authenticates its own connections (PortalGateway
+    // checks the origin and a single-use ticket), and has no Authorization header.
+    if (context.getType() !== 'http') return true;
     // Handler metadata wins over controller metadata.
     const isPublic = this.reflector.getAllAndOverride<boolean | undefined>(
       IS_PUBLIC_KEY,
