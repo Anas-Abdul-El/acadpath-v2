@@ -1,5 +1,7 @@
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { WsAdapter } from '@nestjs/platform-ws';
 import cookieParser from 'cookie-parser';
+import { portalMessageParser } from './portal/portal.gateway.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import {
   ValidationFailedException,
@@ -36,4 +38,13 @@ export function configureApp(app: INestApplication): void {
   );
 
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  // Plain WebSockets (the `ws` library) for the portal gateway, with v1's message
+  // format and its 16 KB limit per message (a bigger frame closes the socket, 1009).
+  app.useWebSocketAdapter(
+    new WsAdapter(app, {
+      messageParser: portalMessageParser,
+      maxPayload: 16 * 1024,
+    }),
+  );
 }

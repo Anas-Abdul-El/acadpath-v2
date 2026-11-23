@@ -31,7 +31,12 @@ const reflector = new Reflector();
     // balancer they would need shared storage (e.g. Redis).
     ThrottlerModule.forRoot({
       throttlers: [
-        GLOBAL_RATE_LIMIT,
+        {
+          ...GLOBAL_RATE_LIMIT,
+          // HTTP requests only: messages on an already-authenticated WebSocket (the
+          // portal sends one per click or key) would use the limit up in minutes.
+          skipIf: (context) => context.getType() !== 'http',
+        },
         {
           ...POLL_RATE_LIMIT,
           // Only routes marked @Polled() count against this limit...

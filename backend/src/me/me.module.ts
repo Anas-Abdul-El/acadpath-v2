@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CatalogModule } from '../catalog/catalog.module.js';
+import { PortalModule } from '../portal/portal.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { TranscriptsModule } from '../transcripts/transcripts.module.js';
 import { DocumentsController } from './documents/documents.controller.js';
@@ -22,7 +23,7 @@ import { UniversityRepository } from './university/university.repository.js';
  * TranscriptQueue and StorageService.
  */
 @Module({
-  imports: [CatalogModule, TranscriptsModule, StorageModule],
+  imports: [CatalogModule, TranscriptsModule, StorageModule, PortalModule],
   controllers: [MeController, DocumentsController, UniversitySourcesController],
   providers: [
     MeService,
