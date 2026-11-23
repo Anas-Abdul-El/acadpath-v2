@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
 import { CatalogModule } from '../catalog/catalog.module.js';
+import { StorageModule } from '../storage/storage.module.js';
+import { TranscriptsModule } from '../transcripts/transcripts.module.js';
+import { DocumentsController } from './documents/documents.controller.js';
+import { DocumentsRepository } from './documents/documents.repository.js';
+import { DocumentsService } from './documents/documents.service.js';
 import { MeController } from './me.controller.js';
 import { MeRepository } from './me.repository.js';
 import { MeService } from './me.service.js';
@@ -13,13 +18,15 @@ import { UniversityRepository } from './university/university.repository.js';
  * the only provider it exports.
  */
 @Module({
-  imports: [CatalogModule],
-  controllers: [MeController],
+  imports: [CatalogModule, TranscriptsModule, StorageModule],
+  controllers: [MeController, DocumentsController],
   providers: [
     MeService,
     MeRepository,
     UniversitySelectionService,
     UniversityRepository,
+    DocumentsService,
+    DocumentsRepository,
   ],
 })
 export class MeModule {}
