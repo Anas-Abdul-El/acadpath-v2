@@ -3,6 +3,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { ProcessingStatus } from '../../generated/prisma/enums.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { MajorDto, UniversityDto } from '../me.types.js';
+import type { UniversityKey } from './university-match.js';
 
 export type UniversityRow = UniversityDto;
 
@@ -51,7 +52,7 @@ export class UniversityRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Only the four columns the matching needs. */
-  listUniversities() {
+  listUniversities(): Promise<UniversityKey[]> {
     return this.prisma.university.findMany({
       select: { id: true, name: true, shortName: true, country: true },
     });
