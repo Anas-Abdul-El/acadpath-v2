@@ -43,7 +43,10 @@ export interface ProfileDto {
 /** Which onboarding steps the student has done, so the frontend knows what to show. */
 export interface OnboardingDto {
   universitySelected: boolean;
+  /** The selected major's catalog; null until a major is selected. */
   catalogStatus: CatalogStatus | null;
+  /** Why the catalog is UNAVAILABLE, when extraction failed. */
+  catalogError: string | null;
   universityDocumentsUploaded: boolean;
   yearOfStudySelected: boolean;
   transcriptRequired: boolean;
@@ -56,6 +59,22 @@ export interface MeData {
   user: UserDto;
   profile: ProfileDto | null;
   onboarding: OnboardingDto | null;
+}
+
+export interface CatalogDto {
+  status: CatalogStatus;
+  error: string | null;
+  title: string | null;
+  source: string | null;
+  courseCount: number;
+  majorCount: number;
+}
+
+/** PUT /me/university response data (plus `replaced`). */
+export interface UniversityData {
+  university: UniversityDto;
+  major: MajorDto;
+  catalog: CatalogDto;
 }
 
 export interface YearOfStudyData {

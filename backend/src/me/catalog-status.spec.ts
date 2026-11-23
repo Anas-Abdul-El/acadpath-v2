@@ -1,4 +1,4 @@
-import { getCatalogStatus, getSourceStatus } from './catalog-status.js';
+import { getSourceStatus } from './catalog-status.js';
 
 const source = (state: {
   errorMessage?: string;
@@ -27,32 +27,5 @@ describe('getSourceStatus', () => {
     ['PENDING before anything', source({}), 'PENDING'],
   ])('is %s', (_case, input, expected) => {
     expect(getSourceStatus(input)).toBe(expected);
-  });
-});
-
-describe('getCatalogStatus', () => {
-  it('is AVAILABLE when any source completed, even if others failed', () => {
-    expect(
-      getCatalogStatus([
-        source({ errorMessage: 'x' }),
-        source({ lastProcessedAt: now }),
-      ]),
-    ).toBe('AVAILABLE');
-  });
-
-  it('is PROCESSING while a source is pending or being processed', () => {
-    expect(getCatalogStatus([source({ errorMessage: 'x' }), source({})])).toBe(
-      'PROCESSING',
-    );
-    expect(getCatalogStatus([source({ lastFetchedAt: now })])).toBe(
-      'PROCESSING',
-    );
-  });
-
-  it('is UNAVAILABLE when every source failed or there are none', () => {
-    expect(getCatalogStatus([source({ errorMessage: 'x' })])).toBe(
-      'UNAVAILABLE',
-    );
-    expect(getCatalogStatus([])).toBe('UNAVAILABLE');
   });
 });

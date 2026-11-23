@@ -1,15 +1,13 @@
-import { Test } from '@nestjs/testing';
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { AppModule } from './../src/app.module.js';
-import { configureApp } from './../src/app.setup.js';
 import type { AuthUser } from './../src/auth/auth.types.js';
 import { CurrentUser } from './../src/auth/decorators/current-user.decorator.js';
 import { Public } from './../src/auth/decorators/public.decorator.js';
 import { Roles } from './../src/auth/decorators/roles.decorator.js';
 import { UserRole } from './../src/generated/prisma/enums.js';
+import { createTestApp } from './utils/create-test-app.js';
 
 const ACCESS_SECRET = process.env.ACCESS_TOKEN_SECRET ?? '';
 const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET ?? '';
@@ -43,14 +41,7 @@ describe('Access-token and role guards (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
-    const moduleFixture = await Test.createTestingModule({
-      imports: [AppModule],
-      controllers: [GuardsTestController],
-    }).compile();
-
-    app = moduleFixture.createNestApplication({ logger: false });
-    configureApp(app);
-    await app.init();
+    ({ app } = await createTestApp({ controllers: [GuardsTestController] }));
   });
 
   afterEach(async () => {

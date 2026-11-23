@@ -1,8 +1,12 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { validateEnv } from './config/env.validation.js';
+import {
+  validateEnv,
+  type EnvironmentVariables,
+} from './config/env.validation.js';
 import { GLOBAL_RATE_LIMIT, RATE_LIMIT_MESSAGE } from './config/rate-limit.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -19,6 +23,14 @@ import { MeModule } from './me/me.module.js';
     ThrottlerModule.forRoot({
       throttlers: [GLOBAL_RATE_LIMIT],
       errorMessage: RATE_LIMIT_MESSAGE,
+    }),
+    // Redis connection shared by every BullMQ queue. forRootAsync waits for
+    // ConfigService, so the URL comes from the validated env.
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvironmentVariables, true>) => ({
+        connection: { url: config.getOrThrow('REDIS_URL', { infer: true }) },
+      }),
     }),
     PrismaModule,
     AuthModule,

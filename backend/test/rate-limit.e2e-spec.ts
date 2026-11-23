@@ -1,11 +1,9 @@
-import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { AppModule } from './../src/app.module.js';
-import { configureApp } from './../src/app.setup.js';
 import { AuthRepository } from './../src/auth/auth.repository.js';
 import { InMemoryAuthRepository } from './fakes/in-memory-auth.repository.js';
+import { createTestApp } from './utils/create-test-app.js';
 
 // Each test builds a new app, and the throttler's in-memory counters live in the app,
 // so every test starts from zero.
@@ -13,16 +11,9 @@ describe('Rate limiting (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
-    const moduleFixture = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-      .overrideProvider(AuthRepository)
-      .useValue(new InMemoryAuthRepository())
-      .compile();
-
-    app = moduleFixture.createNestApplication({ logger: false });
-    configureApp(app);
-    await app.init();
+    ({ app } = await createTestApp({
+      overrides: [[AuthRepository, new InMemoryAuthRepository()]],
+    }));
   });
 
   afterEach(async () => {

@@ -1,6 +1,7 @@
 import type { UserWithProfile } from '../../src/me/me.repository.js';
 import {
   DegreeType,
+  ProcessingStatus,
   UserRole,
   type YearOfStudy,
 } from '../../src/generated/prisma/enums.js';
@@ -36,13 +37,25 @@ export const liu = (sources: Source[] = [completedSource()]): University => ({
   sources,
 });
 
-export const computerScience = (): NonNullable<Profile['major']> => ({
+/** The major row; its catalog is extracted unless another status is passed. */
+export const computerScience = (
+  catalogStatus: ProcessingStatus = ProcessingStatus.COMPLETED,
+  catalogError: string | null = null,
+): NonNullable<Profile['major']> => ({
   id: 'major-cs',
   universityId: 'uni-liu',
   name: 'Computer Science',
   degreeType: DegreeType.BACHELOR,
   totalRequiredCredits: 99,
+  catalogStatus,
+  catalogError,
 });
+
+/** The major as the client sees it: no internal catalog fields. */
+export const computerScienceDto = () => {
+  const { catalogStatus: _s, catalogError: _e, ...dto } = computerScience();
+  return dto;
+};
 
 /** A student row as findUserWithProfile returns it. Override any part of the profile. */
 export const student = (

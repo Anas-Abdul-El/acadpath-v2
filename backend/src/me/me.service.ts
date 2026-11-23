@@ -5,9 +5,14 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { UserRole, YearOfStudy } from '../generated/prisma/enums.js';
-import { getCatalogStatus } from './catalog-status.js';
+import { toCatalogStatus } from './catalog-status.js';
 import { MeRepository } from './me.repository.js';
-import type { MeData, UniversityDto, YearOfStudyData } from './me.types.js';
+import type {
+  MajorDto,
+  MeData,
+  UniversityDto,
+  YearOfStudyData,
+} from './me.types.js';
 
 /**
  * The /me rules (v1: services/me/{get-me,update-profile,update-year-of-study,
@@ -29,11 +34,18 @@ export class MeService {
     }
 
     const university = studentProfile?.university ?? null;
+    const major = studentProfile?.major ?? null;
+    // The catalog fields are internal; the client gets them through `onboarding`.
+    let majorDto: MajorDto | null = null;
+    if (major) {
+      const { catalogStatus: _s, catalogError: _e, ...rest } = major;
+      majorDto = rest;
+    }
     const yearOfStudy = studentProfile?.yearOfStudy ?? null;
     const onboardingCompletedAt = studentProfile?.onboardingCompletedAt ?? null;
     const transcriptCount = studentProfile?._count.documents ?? 0;
 
-    // The sources are only used to work out the statuses below; they aren't sent.
+    // The sources are only used for universityDocumentsUploaded; they aren't sent.
     const sources = university?.sources ?? [];
     let universityDto: UniversityDto | null = null;
     if (university) {
@@ -45,13 +57,15 @@ export class MeService {
       user,
       profile: {
         university: universityDto,
-        major: studentProfile?.major ?? null,
+        major: majorDto,
         yearOfStudy,
         onboardingCompletedAt: onboardingCompletedAt?.toISOString() ?? null,
       },
       onboarding: {
         universitySelected: university !== null,
-        catalogStatus: university ? getCatalogStatus(sources) : null,
+        catalogStatus: major ? toCatalogStatus(major.catalogStatus) : null,
+        catalogError:
+          major?.catalogStatus === 'FAILED' ? major.catalogError : null,
         universityDocumentsUploaded: sources.some(
           (source) => source.uploadedById === user.id,
         ),

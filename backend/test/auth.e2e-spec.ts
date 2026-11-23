@@ -1,13 +1,11 @@
-import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcrypt';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { AppModule } from './../src/app.module.js';
-import { configureApp } from './../src/app.setup.js';
 import { AuthRepository } from './../src/auth/auth.repository.js';
 import { InMemoryAuthRepository } from './fakes/in-memory-auth.repository.js';
+import { createTestApp } from './utils/create-test-app.js';
 
 const ACCESS_SECRET = process.env.ACCESS_TOKEN_SECRET ?? '';
 const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET ?? '';
@@ -37,16 +35,7 @@ describe('Auth routes (e2e)', () => {
 
   beforeEach(async () => {
     repo = new InMemoryAuthRepository();
-    const moduleFixture = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-      .overrideProvider(AuthRepository)
-      .useValue(repo)
-      .compile();
-
-    app = moduleFixture.createNestApplication({ logger: false });
-    configureApp(app);
-    await app.init();
+    ({ app } = await createTestApp({ overrides: [[AuthRepository, repo]] }));
   });
 
   afterEach(async () => {

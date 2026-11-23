@@ -14,10 +14,12 @@ import { Roles } from '../auth/decorators/roles.decorator.js';
 import { AtLeastOneFieldPipe } from '../common/pipes/at-least-one-field.pipe.js';
 import { UserRole } from '../generated/prisma/enums.js';
 // DTOs are value imports: the ValidationPipe needs the class at runtime.
+import { SelectUniversityDto } from './dto/select-university.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { YearOfStudyDto } from './dto/year-of-study.dto.js';
 import { MeService } from './me.service.js';
-import type { MeData, YearOfStudyData } from './me.types.js';
+import type { MeData, UniversityData, YearOfStudyData } from './me.types.js';
+import { UniversitySelectionService } from './university/university-selection.service.js';
 
 /**
  * /api/me: the logged-in user's own data (v1: routes/me.route.ts).
@@ -29,12 +31,29 @@ import type { MeData, YearOfStudyData } from './me.types.js';
  */
 @Controller('me')
 export class MeController {
-  constructor(private readonly meService: MeService) {}
+  constructor(
+    private readonly meService: MeService,
+    private readonly universitySelection: UniversitySelectionService,
+  ) {}
 
   /** Open to admins too: they get profile and onboarding as null. */
   @Get()
   async getMe(@CurrentUser() user: AuthUser): Promise<{ data: MeData }> {
     return { data: await this.meService.getMe(user.id) };
+  }
+
+  /**
+   * Saves the student's university and major. If the major's course catalog isn't
+   * extracted yet, the extraction is queued and catalog.status is PROCESSING; the client
+   * polls GET /me until it becomes AVAILABLE or UNAVAILABLE.
+   */
+  @Put('university')
+  @Roles(UserRole.STUDENT)
+  async selectUniversity(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: SelectUniversityDto,
+  ): Promise<{ data: UniversityData & { replaced: boolean } }> {
+    return { data: await this.universitySelection.select(user.id, dto) };
   }
 
   @Put('year-of-study')

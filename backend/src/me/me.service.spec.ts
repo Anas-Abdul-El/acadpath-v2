@@ -4,13 +4,13 @@ import {
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { YearOfStudy } from '../generated/prisma/enums.js';
+import { ProcessingStatus, YearOfStudy } from '../generated/prisma/enums.js';
 import {
   admin,
   completedSource,
   computerScience,
+  computerScienceDto,
   liu,
-  pendingSource,
   student,
 } from '../../test/fakes/me-fixtures.js';
 import { MeRepository } from './me.repository.js';
@@ -71,6 +71,7 @@ describe('MeService', () => {
       expect(me.onboarding).toEqual({
         universitySelected: false,
         catalogStatus: null,
+        catalogError: null,
         universityDocumentsUploaded: false,
         yearOfStudySelected: false,
         // No year chosen yet is not NEW_STUDENT, so a transcript is required (as in v1).
@@ -104,19 +105,48 @@ describe('MeService', () => {
         website: 'https://liu.edu.lb',
         catalogYear: '2025-2026',
       });
-      expect(me.profile?.major).toEqual(computerScience());
+      // The catalog fields are internal: the client gets them through onboarding.
+      expect(me.profile?.major).toEqual(computerScienceDto());
       expect(me.profile?.onboardingCompletedAt).toBe(
         '2026-11-01T10:00:00.000Z',
       );
       expect(me.onboarding).toEqual({
         universitySelected: true,
         catalogStatus: 'AVAILABLE',
+        catalogError: null,
         universityDocumentsUploaded: true,
         yearOfStudySelected: true,
         transcriptRequired: true,
         transcriptUploaded: true,
         completed: true,
       });
+    });
+
+    it("reports the catalog status of the student's major, not of the whole university", async () => {
+      // The university has a processed source (from another major), but this major failed.
+      repo.findUserWithProfile.mockResolvedValue(
+        student('s1', {
+          university: liu([completedSource()]),
+          major: computerScience(
+            ProcessingStatus.FAILED,
+            'No course information was found for this major',
+          ),
+        }),
+      );
+
+      const me = await service.getMe('s1');
+      expect(me.onboarding).toMatchObject({
+        catalogStatus: 'UNAVAILABLE',
+        catalogError: 'No course information was found for this major',
+      });
+    });
+
+    it('has no catalog status while no major is selected', async () => {
+      repo.findUserWithProfile.mockResolvedValue(
+        student('s1', { university: liu() }),
+      );
+
+      expect((await service.getMe('s1')).onboarding?.catalogStatus).toBeNull();
     });
 
     it('only counts university documents this student uploaded', async () => {
@@ -199,7 +229,7 @@ describe('MeService', () => {
       ],
       [
         'a catalog that is not ready',
-        { ...ready, university: liu([pendingSource()]) },
+        { ...ready, major: computerScience(ProcessingStatus.PROCESSING) },
         "Your university's course catalog isn't ready yet",
       ],
       [

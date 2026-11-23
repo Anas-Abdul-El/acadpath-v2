@@ -43,6 +43,8 @@ const userWithProfileSelect = {
           name: true,
           degreeType: true,
           totalRequiredCredits: true,
+          catalogStatus: true,
+          catalogError: true,
         },
       },
       _count: {

@@ -1,14 +1,14 @@
-import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { AppModule } from './../src/app.module.js';
-import { configureApp } from './../src/app.setup.js';
 import { MeRepository } from './../src/me/me.repository.js';
+import { UniversityRepository } from './../src/me/university/university.repository.js';
 import { YearOfStudy } from './../src/generated/prisma/enums.js';
 import { admin, computerScience, liu, student } from './fakes/me-fixtures.js';
 import { InMemoryMeRepository } from './fakes/in-memory-me.repository.js';
+import { InMemoryUniversityRepository } from './fakes/in-memory-university.repository.js';
+import { createTestApp, type TestApp } from './utils/create-test-app.js';
 
 const jwt = new JwtService();
 const tokenFor = (id: string, role: 'STUDENT' | 'ADMIN') =>
@@ -24,6 +24,8 @@ const tokenFor = (id: string, role: 'STUDENT' | 'ADMIN') =>
 describe('Me routes (e2e)', () => {
   let app: INestApplication<App>;
   let repo: InMemoryMeRepository;
+  let universities: InMemoryUniversityRepository;
+  let catalogQueue: TestApp['catalogQueue'];
 
   beforeEach(async () => {
     repo = new InMemoryMeRepository();
@@ -31,16 +33,13 @@ describe('Me routes (e2e)', () => {
     repo.add(student('s2', { yearOfStudy: YearOfStudy.YEAR_3 }));
     repo.add(admin('a1'));
 
-    const moduleFixture = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-      .overrideProvider(MeRepository)
-      .useValue(repo)
-      .compile();
-
-    app = moduleFixture.createNestApplication({ logger: false });
-    configureApp(app);
-    await app.init();
+    universities = new InMemoryUniversityRepository();
+    ({ app, catalogQueue } = await createTestApp({
+      overrides: [
+        [MeRepository, repo],
+        [UniversityRepository, universities],
+      ],
+    }));
   });
 
   afterEach(async () => {
@@ -62,6 +61,7 @@ describe('Me routes (e2e)', () => {
   describe('authentication and roles', () => {
     it.each([
       ['GET', '/'],
+      ['PUT', '/university'],
       ['PUT', '/year-of-study'],
       ['PATCH', '/profile'],
       ['POST', '/onboarding/complete'],
@@ -74,6 +74,7 @@ describe('Me routes (e2e)', () => {
     });
 
     it.each([
+      ['put', '/university'],
       ['put', '/year-of-study'],
       ['patch', '/profile'],
       ['post', '/onboarding/complete'],
@@ -109,6 +110,7 @@ describe('Me routes (e2e)', () => {
           onboarding: {
             universitySelected: false,
             catalogStatus: null,
+            catalogError: null,
             universityDocumentsUploaded: false,
             yearOfStudySelected: true,
             transcriptRequired: true,
@@ -231,6 +233,157 @@ describe('Me routes (e2e)', () => {
       expect(res.body.data.profile.onboardingCompletedAt).toEqual(
         expect.any(String),
       );
+    });
+  });
+
+  describe('PUT /api/me/university', () => {
+    const body = {
+      name: 'Lebanese International University',
+      country: 'Lebanon',
+      city: 'Beirut',
+      major: 'Computer Science',
+    };
+
+    it('saves a new university and major, queues the catalog extraction, and answers at once', async () => {
+      const res = await as('s1').put('/university').send(body).expect(200);
+
+      expect(res.body.data).toMatchObject({
+        university: {
+          name: 'Lebanese International University',
+          country: 'Lebanon',
+          city: 'Beirut',
+        },
+        major: { name: 'Computer Science', degreeType: 'BACHELOR' },
+        catalog: { status: 'PROCESSING', error: null },
+        replaced: false,
+      });
+      // Internal fields stay internal.
+      expect(res.body.data.major).not.toHaveProperty('catalogStatus');
+
+      const majorId: string = res.body.data.major.id;
+      expect(universities.selections.get('s1')).toEqual({
+        universityId: res.body.data.university.id,
+        majorId,
+      });
+      expect(catalogQueue.add).toHaveBeenCalledOnce();
+      expect(catalogQueue.add).toHaveBeenCalledWith(
+        'extract',
+        expect.objectContaining({ majorId, majorName: 'Computer Science' }),
+        expect.objectContaining({ jobId: majorId, attempts: 3 }),
+      );
+    });
+
+    it('reuses an extracted major: no new job, catalog AVAILABLE', async () => {
+      await as('s1').put('/university').send(body).expect(200);
+      const [major] = [...universities.majors.values()];
+      major.catalogStatus = 'COMPLETED';
+      catalogQueue.add.mockClear();
+
+      const res = await as('s2')
+        .put('/university')
+        .send({
+          ...body,
+          name: ' lebanese  INTERNATIONAL university',
+          major: 'computer science',
+        })
+        .expect(200);
+
+      expect(res.body.data.catalog.status).toBe('AVAILABLE');
+      expect(res.body.data.major.id).toBe(major.id);
+      expect(catalogQueue.add).not.toHaveBeenCalled();
+    });
+
+    it('answers 503 when the queue is down, instead of a vague 500', async () => {
+      catalogQueue.add.mockRejectedValue(new Error('ECONNREFUSED'));
+
+      const res = await as('s1').put('/university').send(body).expect(503);
+      expect(res.body).toEqual({
+        error: {
+          message: 'Catalog extraction is unavailable, try again later',
+        },
+      });
+    });
+
+    it.each([
+      [
+        'a missing name',
+        { ...body, name: undefined },
+        'name',
+        'University name is required',
+      ],
+      [
+        'a blank name',
+        { ...body, name: '   ' },
+        'name',
+        'University name is required',
+      ],
+      [
+        'a short name',
+        { ...body, name: 'LI' },
+        'name',
+        "Enter your university's full name",
+      ],
+      [
+        'a long name',
+        { ...body, name: 'x'.repeat(121) },
+        'name',
+        'Use 120 characters or fewer',
+      ],
+      [
+        'a missing country',
+        { ...body, country: undefined },
+        'country',
+        'Country is required',
+      ],
+      [
+        'a one-letter country',
+        { ...body, country: 'L' },
+        'country',
+        'Enter the full country name',
+      ],
+      [
+        'a country with digits',
+        { ...body, country: 'Lebanon1' },
+        'country',
+        'Use letters only',
+      ],
+      ['a blank city', { ...body, city: '' }, 'city', 'City is required'],
+      [
+        'a city with symbols',
+        { ...body, city: 'Beirut#' },
+        'city',
+        'Use letters only',
+      ],
+      [
+        'a missing major',
+        { ...body, major: undefined },
+        'major',
+        'Major is required',
+      ],
+      [
+        'a one-letter major',
+        { ...body, major: 'C' },
+        'major',
+        "Enter your major's full name",
+      ],
+      [
+        'a long major',
+        { ...body, major: 'x'.repeat(101) },
+        'major',
+        'Use 100 characters or fewer',
+      ],
+    ])('rejects %s', async (_case, payload, path, message) => {
+      const res = await as('s1').put('/university').send(payload).expect(400);
+
+      expect(res.body.error.details).toEqual([{ path, message }]);
+      expect(catalogQueue.add).not.toHaveBeenCalled();
+    });
+
+    it('accepts accented and punctuated place names', async () => {
+      await as('s1')
+        .put('/university')
+        .send({ ...body, country: "Côte d'Ivoire", city: 'Saint-Louis (Nord)' })
+        .expect(200);
     });
   });
 });
