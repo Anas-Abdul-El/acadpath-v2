@@ -4,6 +4,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   Max,
   Min,
@@ -59,6 +60,42 @@ export class EnvironmentVariables {
     message: 'REDIS_URL must be a redis:// or rediss:// URL',
   })
   REDIS_URL: string;
+
+  /**
+   * Vision-capable model on OpenRouter, for images and scanned PDFs (transcripts,
+   * catalog pages). Required, with no default: pick a current model ID on OpenRouter.
+   */
+  @IsString()
+  @MinLength(1)
+  OPENROUTER_VISION_MODEL: string;
+
+  // Object storage for uploaded files (v1: Neon Object Storage). Any S3-compatible
+  // service works: AWS S3 (leave S3_ENDPOINT unset), Neon, R2, or SeaweedFS in Compose.
+
+  /** Custom endpoint for S3-compatible services; unset means AWS S3. */
+  @IsOptional()
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
+  S3_ENDPOINT?: string;
+
+  @IsString()
+  @MinLength(1)
+  S3_REGION = 'us-east-1';
+
+  @IsString()
+  @MinLength(1)
+  S3_BUCKET: string;
+
+  @IsString()
+  @MinLength(1)
+  S3_ACCESS_KEY_ID: string;
+
+  @IsString()
+  @MinLength(1)
+  S3_SECRET_ACCESS_KEY: string;
 }
 
 export function validateEnv(

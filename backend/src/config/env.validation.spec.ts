@@ -9,6 +9,10 @@ const validEnv = {
   REFRESH_TOKEN_SECRET: refreshSecret,
   OPENROUTER_KEY: 'sk-or-test',
   REDIS_URL: 'redis://localhost:6379',
+  OPENROUTER_VISION_MODEL: 'vendor/vision-model',
+  S3_BUCKET: 'acadpath-uploads',
+  S3_ACCESS_KEY_ID: 'dev-access-key',
+  S3_SECRET_ACCESS_KEY: 'dev-secret-key',
 };
 
 describe('validateEnv', () => {
@@ -35,6 +39,10 @@ describe('validateEnv', () => {
     'REFRESH_TOKEN_SECRET',
     'OPENROUTER_KEY',
     'REDIS_URL',
+    'OPENROUTER_VISION_MODEL',
+    'S3_BUCKET',
+    'S3_ACCESS_KEY_ID',
+    'S3_SECRET_ACCESS_KEY',
   ])('refuses to start without %s', (name) => {
     const env: Record<string, unknown> = { ...validEnv };
     delete env[name];
@@ -77,5 +85,24 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...validEnv, REDIS_URL: 'http://localhost:6379' }),
     ).toThrow('REDIS_URL');
+  });
+
+  it('defaults the S3 region and leaves the endpoint unset (AWS)', () => {
+    const env = validateEnv(validEnv);
+    expect(env.S3_REGION).toBe('us-east-1');
+    expect(env.S3_ENDPOINT).toBeUndefined();
+  });
+
+  it('accepts an S3-compatible endpoint URL', () => {
+    expect(
+      validateEnv({ ...validEnv, S3_ENDPOINT: 'http://seaweedfs:8333' })
+        .S3_ENDPOINT,
+    ).toBe('http://seaweedfs:8333');
+  });
+
+  it('rejects an S3 endpoint that is not an http(s) URL', () => {
+    expect(() =>
+      validateEnv({ ...validEnv, S3_ENDPOINT: 'seaweedfs:8333' }),
+    ).toThrow('S3_ENDPOINT');
   });
 });

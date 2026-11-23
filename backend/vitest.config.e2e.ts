@@ -18,6 +18,11 @@ export default defineConfig({
       OPENROUTER_KEY: 'test-key-never-used',
       // Never connected to: e2e tests replace the queue and the worker with fakes.
       REDIS_URL: 'redis://localhost:6379',
+      OPENROUTER_VISION_MODEL: 'test/vision-model',
+      // Never connected to: e2e tests replace StorageService with an in-memory fake.
+      S3_BUCKET: 'test-bucket',
+      S3_ACCESS_KEY_ID: 'test-access-key',
+      S3_SECRET_ACCESS_KEY: 'test-secret-key',
     },
   },
 });
