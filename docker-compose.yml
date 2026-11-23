@@ -7,6 +7,8 @@ services:
     environment:
       PORT: 4000
       DATABASE_URL: ${DATABASE_URL}
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
     ports:
       - "${BACKEND_PORT:-4000}:4000"
 

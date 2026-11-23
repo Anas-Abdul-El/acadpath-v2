@@ -57,3 +57,9 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Prisma generated client (rebuilt by `pnpm prisma:generate`)
+/src/generated/prisma
+
+# Local env
+.env
