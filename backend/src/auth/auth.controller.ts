@@ -7,9 +7,11 @@ import {
   Res,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import type { CookieOptions, Response } from 'express';
 import { Cookies } from '../common/decorators/cookies.decorator.js';
 import type { EnvironmentVariables } from '../config/env.validation.js';
+import { AUTH_RATE_LIMIT } from '../config/rate-limit.js';
 import {
   REFRESH_COOKIE_NAME,
   REFRESH_COOKIE_PATH,
@@ -52,6 +54,7 @@ export class AuthController {
 
   /** Creates a student account (the route keeps v1's name). 201. */
   @Post('signin')
+  @Throttle({ default: AUTH_RATE_LIMIT })
   async signin(
     @Body() dto: SigninDto,
     @Res({ passthrough: true }) res: Response,
@@ -64,6 +67,8 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  // Overrides the global limit for this route only: the guard reads this metadata.
+  @Throttle({ default: AUTH_RATE_LIMIT })
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
