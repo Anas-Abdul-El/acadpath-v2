@@ -8,6 +8,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { AccessTokenGuard } from './auth/guards/access-token.guard.js';
 import { RolesGuard } from './auth/guards/roles.guard.js';
+import { MeModule } from './me/me.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RolesGuard } from './auth/guards/roles.guard.js';
     }),
     PrismaModule,
     AuthModule,
+    MeModule,
   ],
   providers: [
     // APP_GUARD registers ThrottlerGuard for every route in the app (v1: app.use(limiter)).
