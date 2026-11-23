@@ -1,8 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
-import { ProcessingStatus } from '../../generated/prisma/enums.js';
+import {
+  ProcessingStatus,
+  type SourceType,
+} from '../../generated/prisma/enums.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { MajorDto, UniversityDto } from '../me.types.js';
+import type { UniversityKey } from './university-match.js';
 
 export type UniversityRow = UniversityDto;
 
@@ -41,6 +45,21 @@ const majorSelect = {
   catalogError: true,
 } as const satisfies Prisma.MajorSelect;
 
+// The url (a storage key for uploads) stays internal.
+const sourceSelect = {
+  id: true,
+  title: true,
+  sourceType: true,
+  errorMessage: true,
+  lastFetchedAt: true,
+  lastProcessedAt: true,
+  createdAt: true,
+} as const satisfies Prisma.CourseMaterialSourceSelect;
+
+export type SourceRow = Prisma.CourseMaterialSourceGetPayload<{
+  select: typeof sourceSelect;
+}>;
+
 const isUniqueViolation = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError &&
   error.code === 'P2002';
@@ -51,7 +70,7 @@ export class UniversityRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Only the four columns the matching needs. */
-  listUniversities() {
+  listUniversities(): Promise<UniversityKey[]> {
     return this.prisma.university.findMany({
       select: { id: true, name: true, shortName: true, country: true },
     });
@@ -160,5 +179,66 @@ export class UniversityRepository {
       courseCount,
       majorCount,
     };
+  }
+
+  // ─── Uploaded catalog sources (POST/GET /me/university/sources) ───
+
+  /** The student's university and major, with what the sources routes need. */
+  async findSourcesSelection(userId: string) {
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      select: {
+        university: {
+          select: { id: true, name: true, city: true, country: true },
+        },
+        major: { select: { id: true, name: true, catalogStatus: true } },
+      },
+    });
+    if (!profile?.university) return null;
+    return { university: profile.university, major: profile.major };
+  }
+
+  /** lastFetchedAt is set at once: the file is in hand, so the source is PROCESSING. */
+  createUploadedSources(
+    universityId: string,
+    userId: string,
+    files: { title: string; url: string; sourceType: SourceType }[],
+  ): Promise<SourceRow[]> {
+    return this.prisma.courseMaterialSource.createManyAndReturn({
+      data: files.map((file) => ({
+        ...file,
+        universityId,
+        uploadedById: userId,
+        lastFetchedAt: new Date(),
+      })),
+      select: sourceSelect,
+    });
+  }
+
+  /** So GET /me shows PROCESSING; a major that has its catalog stays COMPLETED. */
+  async markMajorPendingIfIncomplete(majorId: string): Promise<void> {
+    await this.prisma.major.updateMany({
+      where: {
+        id: majorId,
+        catalogStatus: { not: ProcessingStatus.COMPLETED },
+      },
+      data: { catalogStatus: ProcessingStatus.PENDING, catalogError: null },
+    });
+  }
+
+  async markSourcesFailed(sourceIds: string[], error: string): Promise<void> {
+    await this.prisma.courseMaterialSource.updateMany({
+      where: { id: { in: sourceIds } },
+      data: { errorMessage: error },
+    });
+  }
+
+  /** Every source of the university, newest first (v1: getStudentUniversitySources). */
+  listSources(universityId: string): Promise<SourceRow[]> {
+    return this.prisma.courseMaterialSource.findMany({
+      where: { universityId },
+      select: sourceSelect,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

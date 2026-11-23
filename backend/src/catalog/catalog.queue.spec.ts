@@ -43,4 +43,26 @@ describe('CatalogQueue', () => {
       removeOnFail: true,
     });
   });
+
+  it('enqueues uploaded sources as their own job type', async () => {
+    const data = {
+      majorId: 'major-cs',
+      universityId: 'uni-liu',
+      universityName: 'LIU',
+      city: 'Beirut',
+      country: 'Lebanon',
+      majorName: 'Computer Science',
+      sourceIds: ['s1', 's2'],
+    };
+
+    await catalogQueue.enqueueUploadedSources(data);
+
+    expect(queue.add).toHaveBeenCalledWith('uploaded-sources', data, {
+      jobId: 'sources-s1',
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 30_000 },
+      removeOnComplete: true,
+      removeOnFail: true,
+    });
+  });
 });

@@ -6,17 +6,23 @@ import { AppModule } from '../../src/app.module.js';
 import { configureApp } from '../../src/app.setup.js';
 import { CatalogProcessor } from '../../src/catalog/catalog.processor.js';
 import { CATALOG_QUEUE } from '../../src/catalog/catalog.queue.js';
+import { TranscriptProcessor } from '../../src/transcripts/transcript.processor.js';
+import { TRANSCRIPT_QUEUE } from '../../src/transcripts/transcript.queue.js';
+import { StorageService } from '../../src/storage/storage.service.js';
+import { InMemoryStorage } from '../fakes/in-memory-storage.js';
 
 export interface TestApp {
   app: INestApplication<App>;
   /** The fake BullMQ queue: inspect `catalogQueue.add.mock.calls` to see enqueued jobs. */
   catalogQueue: { add: ReturnType<typeof vi.fn> };
+  /** Every fake queue by name (catalog, transcripts). */
+  queues: Record<'catalog' | 'transcripts', { add: ReturnType<typeof vi.fn> }>;
 }
 
 /**
  * The real AppModule with the same setup as main.ts (configureApp), minus everything
- * that would leave the process: the BullMQ queue becomes an in-memory fake and the
- * worker is removed, so no test needs Redis. Pass providers to replace (e.g. a
+ * that would leave the process: the BullMQ queues become in-memory fakes, the workers
+ * are removed, and object storage lives in memory, so no test needs Redis or S3. Pass providers to replace (e.g. a
  * repository with an in-memory fake) and extra test-only controllers.
  */
 export async function createTestApp(
@@ -26,6 +32,7 @@ export async function createTestApp(
   } = {},
 ): Promise<TestApp> {
   const catalogQueue = { add: vi.fn() };
+  const queues = { catalog: catalogQueue, transcripts: { add: vi.fn() } };
 
   let builder = Test.createTestingModule({
     imports: [AppModule],
@@ -35,7 +42,14 @@ export async function createTestApp(
     .useValue(catalogQueue)
     // A plain object has no @Processor metadata, so no BullMQ worker is started.
     .overrideProvider(CatalogProcessor)
-    .useValue({});
+    .useValue({})
+    .overrideProvider(getQueueToken(TRANSCRIPT_QUEUE))
+    .useValue(queues.transcripts)
+    .overrideProvider(TranscriptProcessor)
+    .useValue({})
+    // Object storage in memory; a test can pass its own InMemoryStorage to inspect it.
+    .overrideProvider(StorageService)
+    .useValue(new InMemoryStorage());
 
   for (const [token, value] of options.overrides ?? []) {
     builder = builder.overrideProvider(token).useValue(value);
@@ -47,5 +61,5 @@ export async function createTestApp(
   });
   configureApp(app);
   await app.init();
-  return { app, catalogQueue };
+  return { app, catalogQueue, queues };
 }

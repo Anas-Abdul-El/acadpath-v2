@@ -12,6 +12,21 @@ const WEB_SEARCH_TOOL = {
   parameters: { engine: 'exa', max_results: 5 },
 } as const;
 
+/** A file sent along with the prompt: an image, or a PDF whose text couldn't be read. */
+export interface AiAttachment {
+  data: Buffer;
+  mimeType: string;
+  fileName: string;
+}
+
+/** OpenRouter content parts: images as image_url, PDFs as file (both base64 data URLs). */
+function toContentPart(file: AiAttachment) {
+  const dataUrl = `data:${file.mimeType};base64,${file.data.toString('base64')}`;
+  return file.mimeType === 'application/pdf'
+    ? { type: 'file', file: { filename: file.fileName, file_data: dataUrl } }
+    : { type: 'image_url', image_url: { url: dataUrl } };
+}
+
 /** Removes a ```json ... ``` fence some models wrap their JSON in. */
 function parseJsonReply(reply: string): unknown {
   try {
@@ -41,17 +56,22 @@ function replyText(response: unknown): string | null {
 @Injectable()
 export class AiService {
   private readonly model: string;
+  private readonly visionModel: string;
 
   constructor(
     @Inject(AI_CLIENT) private readonly client: AiClient,
     config: ConfigService<EnvironmentVariables, true>,
   ) {
     this.model = config.getOrThrow('OPENROUTER_MODEL', { infer: true });
+    this.visionModel = config.getOrThrow('OPENROUTER_VISION_MODEL', {
+      infer: true,
+    });
   }
 
   /**
    * Sends `prompt` as the system message and `payload` as JSON in the user message,
-   * then returns the reply parsed into `dto`.
+   * then returns the reply parsed into `dto`. With attachments, the vision model is
+   * used and the files go in the same user message.
    *
    * @throws AiUnavailableError when the provider fails (after the SDK's retries)
    * @throws AiInvalidResponseError when the reply isn't valid JSON for `dto`
@@ -60,18 +80,27 @@ export class AiService {
     prompt: string,
     payload: unknown,
     dto: ClassConstructor<T>,
-    { webSearch = false }: { webSearch?: boolean } = {},
+    {
+      webSearch = false,
+      attachments = [],
+    }: { webSearch?: boolean; attachments?: AiAttachment[] } = {},
   ): Promise<T> {
+    const text = JSON.stringify(payload);
+    const userContent =
+      attachments.length === 0
+        ? text
+        : [{ type: 'text', text }, ...attachments.map(toContentPart)];
+
     let response: unknown;
     try {
       // client.post instead of chat.completions.create: OpenRouter's web-search tool
       // isn't in the SDK's types. post() goes through the same timeout and retries.
       response = await this.client.post('/chat/completions', {
         body: {
-          model: this.model,
+          model: attachments.length === 0 ? this.model : this.visionModel,
           messages: [
             { role: 'system', content: prompt },
-            { role: 'user', content: JSON.stringify(payload) },
+            { role: 'user', content: userContent },
           ],
           ...(webSearch && { tools: [WEB_SEARCH_TOOL] }),
         },
@@ -80,8 +109,8 @@ export class AiService {
       throw new AiUnavailableError({ cause: error });
     }
 
-    const text = replyText(response);
-    const json = text === null ? undefined : parseJsonReply(text);
+    const reply = replyText(response);
+    const json = reply === null ? undefined : parseJsonReply(reply);
     if (typeof json !== 'object' || json === null) {
       throw new AiInvalidResponseError();
     }

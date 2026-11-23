@@ -40,7 +40,10 @@ describe('AiService', () => {
         { provide: AI_CLIENT, useValue: client },
         {
           provide: ConfigService,
-          useValue: new ConfigService({ OPENROUTER_MODEL: 'test/model' }),
+          useValue: new ConfigService({
+            OPENROUTER_MODEL: 'test/model',
+            OPENROUTER_VISION_MODEL: 'test/vision',
+          }),
         },
       ],
     }).compile();
@@ -136,5 +139,62 @@ describe('AiService', () => {
 
     expect(error).toBeInstanceOf(AiUnavailableError);
     expect((error as AiUnavailableError).cause).toBe(cause);
+  });
+
+  describe('with attachments (images, scanned PDFs)', () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    const pdf = Buffer.from('%PDF-1.4');
+
+    it('switches to the vision model and sends the files as content parts', async () => {
+      client.post.mockResolvedValue(completion('{"items":[]}'));
+
+      await ai.askForJson('SYSTEM PROMPT', { major: 'CS' }, ReplyDto, {
+        attachments: [
+          { data: png, mimeType: 'image/png', fileName: 'page1.png' },
+          { data: pdf, mimeType: 'application/pdf', fileName: 'scan.pdf' },
+        ],
+      });
+
+      expect(client.post).toHaveBeenCalledWith('/chat/completions', {
+        body: {
+          model: 'test/vision',
+          messages: [
+            { role: 'system', content: 'SYSTEM PROMPT' },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: '{"major":"CS"}' },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:image/png;base64,${png.toString('base64')}`,
+                  },
+                },
+                {
+                  type: 'file',
+                  file: {
+                    filename: 'scan.pdf',
+                    file_data: `data:application/pdf;base64,${pdf.toString('base64')}`,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      });
+    });
+
+    it('keeps the text model and a plain string message when nothing is attached', async () => {
+      client.post.mockResolvedValue(completion('{"items":[]}'));
+
+      await ai.askForJson('P', {}, ReplyDto, { attachments: [] });
+
+      const [, { body }] = client.post.mock.calls[0] as [
+        string,
+        { body: { model: string; messages: { content: unknown }[] } },
+      ];
+      expect(body.model).toBe('test/model');
+      expect(body.messages[1].content).toBe('{}');
+    });
   });
 });
