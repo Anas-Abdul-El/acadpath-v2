@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { Body, Controller, INestApplication, Post } from '@nestjs/common';
-import { IsInt, IsString, Max, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsInt, IsString, Max, Min, ValidateNested } from 'class-validator';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { configureApp } from './../src/app.setup.js';
@@ -16,11 +17,22 @@ class CreateCourseDto {
   credits: number;
 }
 
+class CreatePlanDto {
+  @ValidateNested({ each: true })
+  @Type(() => CreateCourseDto)
+  courses: CreateCourseDto[];
+}
+
 @Controller('validation-test')
 class ValidationTestController {
   @Post()
   create(@Body() dto: CreateCourseDto) {
     return { isDto: dto instanceof CreateCourseDto, dto };
+  }
+
+  @Post('plan')
+  createPlan(@Body() dto: CreatePlanDto) {
+    return dto;
   }
 }
 
@@ -43,32 +55,57 @@ describe('Global ValidationPipe (e2e)', () => {
 
   it('accepts a valid body and transforms it into a DTO instance', () => {
     return request(app.getHttpServer())
-      .post('/validation-test')
+      .post('/api/validation-test')
       .send({ code: 'CSCI250', credits: 3 })
       .expect(201)
       .expect({ isDto: true, dto: { code: 'CSCI250', credits: 3 } });
   });
 
-  it('rejects a body that breaks the DTO rules', async () => {
+  it('rejects a body that breaks the DTO rules, in the v1 error shape', async () => {
     const res = await request(app.getHttpServer())
-      .post('/validation-test')
+      .post('/api/validation-test')
       .send({ code: 42, credits: 9 })
       .expect(400);
 
-    expect(res.body.message).toEqual(
-      expect.arrayContaining([
-        'code must be a string',
-        'credits must not be greater than 6',
-      ]),
-    );
+    // One entry per invalid field (stopAtFirstError), like v1's Zod-based AppErr.
+    expect(res.body).toEqual({
+      error: {
+        message: 'Validation failed',
+        details: [
+          { path: 'code', message: 'code must be a string' },
+          { path: 'credits', message: 'credits must not be greater than 6' },
+        ],
+      },
+    });
   });
 
   it('rejects properties that are not on the DTO', async () => {
     const res = await request(app.getHttpServer())
-      .post('/validation-test')
+      .post('/api/validation-test')
       .send({ code: 'CSCI250', credits: 3, role: 'admin' })
       .expect(400);
 
-    expect(res.body.message).toContain('property role should not exist');
+    expect(res.body.error.details).toEqual([
+      { path: 'role', message: 'property role should not exist' },
+    ]);
+  });
+
+  it('reports nested fields with a dotted path', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/validation-test/plan')
+      .send({
+        courses: [
+          { code: 'CSCI250', credits: 3 },
+          { code: 'X', credits: 7 },
+        ],
+      })
+      .expect(400);
+
+    expect(res.body.error.details).toEqual([
+      {
+        path: 'courses.1.credits',
+        message: 'credits must not be greater than 6',
+      },
+    ]);
   });
 });
