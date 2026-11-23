@@ -6,6 +6,8 @@ import { validateEnv } from './config/env.validation.js';
 import { GLOBAL_RATE_LIMIT, RATE_LIMIT_MESSAGE } from './config/rate-limit.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { AccessTokenGuard } from './auth/guards/access-token.guard.js';
+import { RolesGuard } from './auth/guards/roles.guard.js';
 
 @Module({
   imports: [
@@ -25,6 +27,11 @@ import { AuthModule } from './auth/auth.module.js';
     // Guards run after middleware and before pipes, so a blocked request never reaches
     // validation or the handler.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Then every route needs a valid access token unless it is marked @Public()
+    // (v1: authenticate), and @Roles() routes check the role (v1: authorize).
+    // Global guards run in the order they are listed here.
+    { provide: APP_GUARD, useClass: AccessTokenGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}

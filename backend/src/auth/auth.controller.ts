@@ -18,6 +18,7 @@ import {
   REFRESH_TOKEN_TTL_MS,
 } from './auth.constants.js';
 import { AuthService } from './auth.service.js';
+import { Public } from './decorators/public.decorator.js';
 import type { PublicUser } from './auth.types.js';
 // DTOs are imported as values, not `import type`: the ValidationPipe reads the
 // parameter's class from decorator metadata at runtime.
@@ -35,7 +36,10 @@ interface AuthResponse {
  *
  * `@Res({ passthrough: true })` gives access to Express's response to set cookies,
  * while Nest still sends the returned value as the body.
+ *
+ * @Public(): these routes are how a user gets an access token, so they can't require one.
  */
+@Public()
 @Controller('auth')
 export class AuthController {
   private readonly cookieOptions: CookieOptions;
