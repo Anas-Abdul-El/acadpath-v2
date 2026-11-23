@@ -9,8 +9,23 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET}
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+      OPENROUTER_KEY: ${OPENROUTER_KEY}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-nvidia/nemotron-3-ultra-550b-a55b:free}
+      # Job queues (catalog extraction). Uses the redis service below.
+      REDIS_URL: redis://redis:6379
     ports:
       - "${BACKEND_PORT:-4000}:4000"
+    depends_on:
+      - redis
+
+  # Queue storage for BullMQ. Not published to the host; only the backend reaches it.
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    # Persist queued jobs across restarts.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
 
   frontend:
     build:
@@ -27,3 +42,6 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - backend
+
+volumes:
+  redis-data:

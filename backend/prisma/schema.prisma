@@ -185,6 +185,12 @@ model Major {
   degreeType           DegreeType @default(BACHELOR)
   totalRequiredCredits Int?
 
+  // Course catalog extraction for this major, run by the catalog queue worker.
+  // FAILED keeps the reason in catalogError; catalogProcessedAt is the last finished run.
+  catalogStatus      ProcessingStatus @default(PENDING)
+  catalogError       String?          @db.Text
+  catalogProcessedAt DateTime?
+
   university University @relation(fields: [universityId], references: [id], onDelete: Cascade)
 
   students StudentProfile[]
