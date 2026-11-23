@@ -42,6 +42,7 @@ describe('StorageService', () => {
       ['image/png', 'png'],
       ['image/jpeg', 'jpg'],
       ['image/webp', 'webp'],
+      ['text/html', 'html'],
       ['application/x-unknown', 'bin'],
     ])('uses the extension for %s', (type, ext) => {
       expect(storage.newKey('sources', 'u1', type).endsWith(`.${ext}`)).toBe(

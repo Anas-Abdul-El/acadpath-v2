@@ -9,22 +9,30 @@ import { DocumentsService } from './documents/documents.service.js';
 import { MeController } from './me.controller.js';
 import { MeRepository } from './me.repository.js';
 import { MeService } from './me.service.js';
+import { MePortalController } from './portal/me-portal.controller.js';
+import { MePortalService } from './portal/me-portal.service.js';
 import { UniversitySelectionService } from './university/university-selection.service.js';
 import { UniversitySourcesController } from './university/university-sources.controller.js';
 import { UniversitySourcesService } from './university/university-sources.service.js';
 import { UniversityRepository } from './university/university.repository.js';
 
 /**
- * The logged-in user's own data: profile, university, catalog sources, documents.
+ * The logged-in user's own data: profile, university, catalog sources, documents, and
+ * the student-portal browser.
  *
  * Guards and @CurrentUser come from the auth feature but need no import here: the
  * guards are global (APP_GUARD) and decorators are plain functions. PrismaService is
- * global. The imported modules each export one provider: CatalogQueue,
- * TranscriptQueue and StorageService.
+ * global. The imported modules export what the routes use: CatalogQueue,
+ * TranscriptQueue, StorageService, PortalSessions and PortalTickets.
  */
 @Module({
   imports: [CatalogModule, TranscriptsModule, StorageModule, PortalModule],
-  controllers: [MeController, DocumentsController, UniversitySourcesController],
+  controllers: [
+    MeController,
+    DocumentsController,
+    UniversitySourcesController,
+    MePortalController,
+  ],
   providers: [
     MeService,
     MeRepository,
@@ -33,6 +41,7 @@ import { UniversityRepository } from './university/university.repository.js';
     UniversityRepository,
     DocumentsService,
     DocumentsRepository,
+    MePortalService,
   ],
 })
 export class MeModule {}

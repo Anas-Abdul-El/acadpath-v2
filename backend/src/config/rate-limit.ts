@@ -10,12 +10,20 @@ export const GLOBAL_RATE_LIMIT = {
   limit: 100,
 };
 
-/** @Polled() routes only: 600 per user per 15 minutes, about one every 1.5 s (v1: pollLimiter). */
-export const POLL_RATE_LIMIT = {
-  name: 'poll',
-  ttl: FIFTEEN_MINUTES_MS,
-  limit: 600,
-};
+/**
+ * Limits counted per logged-in user, on the routes that opt in with
+ * @UserRateLimit(name) (v1's limiters keyed by user id):
+ * - poll: GET routes the frontend polls while uploads process (about one every 1.5 s);
+ * - portal: starting the remote portal browser, which launches Chromium;
+ * - ai: requests that end in an AI call.
+ */
+export const USER_RATE_LIMITS = {
+  poll: { ttl: FIFTEEN_MINUTES_MS, limit: 600 },
+  portal: { ttl: FIFTEEN_MINUTES_MS, limit: 40 },
+  ai: { ttl: FIFTEEN_MINUTES_MS, limit: 30 },
+} as const;
+
+export type UserRateLimitName = keyof typeof USER_RATE_LIMITS;
 
 /** Login and sign-up: 10 attempts per IP per 15 minutes, to slow down password guessing. */
 export const AUTH_RATE_LIMIT = { ttl: FIFTEEN_MINUTES_MS, limit: 10 };

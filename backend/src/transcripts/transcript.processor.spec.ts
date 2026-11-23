@@ -177,6 +177,39 @@ describe('TranscriptProcessor', () => {
     expect(ai.askForJson).not.toHaveBeenCalled();
   });
 
+  it('reads an HTML document (a portal capture) as text, cut to 60,000 characters', async () => {
+    const page = `<html><body><nav>Menu</nav><h1>Transcript</h1><table>
+      <tr><td>CSCI 250</td><td>B+</td><td>Fall 2024</td></tr></table>
+      <p>${'x'.repeat(70_000)}</p></body></html>`;
+    storage.get.mockResolvedValue(Buffer.from(page));
+    repo.findJobContext.mockResolvedValue({
+      ...context,
+      documents: [
+        {
+          id: 'd1',
+          fileName: 'portal-transcript.html',
+          fileUrl: 'documents/sp-1/c.html',
+          mimeType: 'text/html',
+        },
+      ],
+    });
+
+    await processor.process(job());
+
+    const [, payload, , options] = ai.askForJson.mock.calls[0] as [
+      string,
+      { documents: { fileName: string; text: string }[] },
+      unknown,
+      { attachments: unknown[] },
+    ];
+    expect(payload.documents).toHaveLength(1);
+    expect(payload.documents[0].fileName).toBe('portal-transcript.html');
+    expect(payload.documents[0].text).toContain('CSCI 250 | B+ | Fall 2024');
+    expect(payload.documents[0].text).not.toContain('<td>');
+    expect(payload.documents[0].text.length).toBe(60_000);
+    expect(options.attachments).toEqual([]);
+  });
+
   it('fails for good when no course matches the major', async () => {
     repo.listMajorCourses.mockResolvedValue([{ id: 'x', code: 'ARTS 100' }]);
 

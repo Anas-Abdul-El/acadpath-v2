@@ -12,4 +12,6 @@ export const EXTENSIONS: Record<string, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
+  // A page captured from the student portal.
+  'text/html': 'html',
 };

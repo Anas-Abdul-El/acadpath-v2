@@ -4,13 +4,12 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import type { ValidatedFile } from '../../common/uploads/uploaded-files.pipe.js';
 import {
   ProcessingStatus,
   type StudentDocumentType,
 } from '../../generated/prisma/enums.js';
 import { StorageService } from '../../storage/storage.service.js';
-import { storeFiles } from '../../storage/store-files.js';
+import { storeFiles, type FileInput } from '../../storage/store-files.js';
 import { TranscriptQueue } from '../../transcripts/transcript.queue.js';
 import {
   DocumentsRepository,
@@ -53,7 +52,7 @@ export class DocumentsService {
   async upload(
     userId: string,
     type: StudentDocumentType,
-    files: ValidatedFile[],
+    files: FileInput[],
   ): Promise<StudentDocumentDto[]> {
     const selection = await this.repo.findSelection(userId);
     if (!selection) {
