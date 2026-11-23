@@ -29,9 +29,7 @@ export class DocumentsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /** The student's profile id and their major's catalog status; null without a major. */
-  async findSelection(
-    userId: string,
-  ): Promise<{
+  async findSelection(userId: string): Promise<{
     studentId: string;
     catalogStatus: ProcessingStatus | null;
   } | null> {

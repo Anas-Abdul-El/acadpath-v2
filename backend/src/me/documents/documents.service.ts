@@ -10,6 +10,7 @@ import {
   type StudentDocumentType,
 } from '../../generated/prisma/enums.js';
 import { StorageService } from '../../storage/storage.service.js';
+import { storeFiles } from '../../storage/store-files.js';
 import { TranscriptQueue } from '../../transcripts/transcript.queue.js';
 import {
   DocumentsRepository,
@@ -65,11 +66,21 @@ export class DocumentsService {
       );
     }
 
-    const stored = await this.storeAll(selection.studentId, files);
+    const stored = await storeFiles(
+      this.storage,
+      'documents',
+      selection.studentId,
+      files,
+    );
     const documents = await this.repo.createDocuments(
       selection.studentId,
       type,
-      stored,
+      stored.map(({ file, key }) => ({
+        fileName: file.originalName,
+        fileUrl: key,
+        mimeType: file.mimeType,
+        fileSize: file.size,
+      })),
     );
     const documentIds = documents.map((d) => d.id);
 
@@ -97,36 +108,5 @@ export class DocumentsService {
     type?: StudentDocumentType,
   ): Promise<StudentDocumentDto[]> {
     return (await this.repo.listDocuments(userId, type)).map(toDto);
-  }
-
-  /** Stores every file, or none: on a failure, the ones already stored are removed. */
-  private async storeAll(studentId: string, files: ValidatedFile[]) {
-    const stored: {
-      fileName: string;
-      fileUrl: string;
-      mimeType: string;
-      fileSize: number;
-    }[] = [];
-    try {
-      for (const file of files) {
-        const key = this.storage.newKey('documents', studentId, file.mimeType);
-        await this.storage.put(key, file.buffer, file.mimeType);
-        stored.push({
-          fileName: file.originalName,
-          fileUrl: key,
-          mimeType: file.mimeType,
-          fileSize: file.size,
-        });
-      }
-      return stored;
-    } catch (error) {
-      this.logger.error('Could not store uploaded files', error);
-      await Promise.allSettled(
-        stored.map((s) => this.storage.delete(s.fileUrl)),
-      );
-      throw new ServiceUnavailableException(
-        'File storage is unavailable, try again later',
-      );
-    }
   }
 }
