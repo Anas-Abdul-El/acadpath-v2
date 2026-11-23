@@ -33,6 +33,8 @@ jobs:
           cache-dependency-path: backend/pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
+      # Lint and tests import the Prisma client, which is generated, not committed.
+      - run: pnpm prisma:generate
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm test:e2e

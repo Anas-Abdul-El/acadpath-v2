@@ -7,6 +7,8 @@ export default defineConfig({
   test: {
     globals: true,
     root: './',
+    // Decorator metadata (class-transformer, Nest DI) needs this polyfill loaded first.
+    setupFiles: ['reflect-metadata'],
     include: ['**/*.spec.ts'],
   },
 });

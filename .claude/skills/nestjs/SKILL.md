@@ -25,8 +25,8 @@ anything here disagrees with those files, they win.
 
 - **ESM.** Relative imports end in `.js` (`import { UsersService } from './users.service.js'`).
   Use `import.meta.dirname`, never `__dirname`. Use `import type` for type-only imports.
-- **Validation is Zod through `StandardSchemaValidationPipe`**, not `class-validator` DTO classes.
-  The schema is the source of truth, and the TypeScript type is inferred from it.
+- **Validation is `class-validator` DTO classes through the global `ValidationPipe`**, not Zod.
+  The DTO class is both the runtime rule set and the TypeScript type.
 - **Tests are Vitest.** Mocks use `vi.fn()` and `vi.spyOn()`, never `jest.*`. Unit tests are
   `src/**/*.spec.ts`. E2E tests live in `test/` and run with `pnpm test:e2e`.
 - **Strict types.** No `any`, `as any`, `@ts-ignore`, or unexplained `!`. Use `unknown` and parse
@@ -42,9 +42,9 @@ anything here disagrees with those files, they win.
 | `services/*.ts` (imported directly)   | `@Injectable()` provider, injected in constructor  | The DI container creates it once and hands it to whoever needs it.    |
 | `authenticate` middleware             | Guard (`CanActivate`)                              | Guards see the `ExecutionContext` (handler + metadata) and run after middleware. |
 | `authorize(role)` middleware          | Guard + custom decorator read with `Reflector`     | Role metadata sits on the handler; the guard reads it.                 |
-| `validate*` middleware (Zod)          | `@Body({ schema })` + `StandardSchemaValidationPipe` | Pipes transform/validate one argument right before the handler.    |
+| `validate*` middleware (Zod)          | DTO class + global `ValidationPipe`                | Pipes transform/validate one argument right before the handler.    |
 | `errorHandler` middleware             | Exception filter (`@Catch()`)                      | Filters catch thrown exceptions anywhere in the lifecycle.             |
-| `config/*.ts` + `env.ts`              | `@nestjs/config` with a Zod-validated env          | Config becomes an injectable provider, validated at boot.              |
+| `config/*.ts` + `env.ts`              | `@nestjs/config` with a class-validator env class  | Config becomes an injectable provider, validated at boot.              |
 | `express-rate-limit`                  | `@nestjs/throttler`                                | First-party, works with guards and per-route overrides.                |
 
 Request lifecycle, in order: **middleware → guards → interceptors (before) → pipes → handler →
@@ -63,55 +63,67 @@ time it comes up (see `CLAUDE.md` §11).
 3. **Controller.** `pnpm exec nest g controller <feature>`.
 4. After running the CLI: make sure the generated imports end in `.js`, the generated spec uses
    Vitest (`vi.fn()`), and the module registered the new class.
-5. **Schemas.** Put the Zod schemas in `<feature>/<feature>.schemas.ts` and infer the types from
-   them.
+5. **DTOs.** One class-validator DTO per request shape in `<feature>/dto/`. Derive update DTOs
+   with `PartialType` instead of copying fields.
 6. **Guards/filters** only when the feature needs them. Reuse existing ones before writing new
    ones.
 7. **Tests**, then run the checks below.
 
 ## Patterns
 
-### Validation with Zod
+### Validation with class-validator
 
-Register the pipe once in `main.ts`. It only validates parameters that declare a schema, so global
-binding is safe:
-
-```ts
-import { StandardSchemaValidationPipe } from '@nestjs/common';
-// in bootstrap(), after NestFactory.create(...)
-app.useGlobalPipes(new StandardSchemaValidationPipe());
-```
+The global `ValidationPipe` is already registered in `src/app.setup.ts` (`configureApp`), which
+`main.ts` and the e2e tests both call. Don't register it again per controller.
 
 ```ts
-// courses/courses.schemas.ts
-import { z } from 'zod';
+// courses/dto/create-course.dto.ts
+import { IsInt, IsString, Max, Min, MinLength } from 'class-validator';
 
-export const createCourseSchema = z.strictObject({
-  code: z.string().min(1),
-  title: z.string().min(1),
-});
-export type CreateCourseInput = z.infer<typeof createCourseSchema>;
+export class CreateCourseDto {
+  @IsString()
+  @MinLength(1)
+  code: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(6)
+  credits: number;
+}
+
+// courses/dto/update-course.dto.ts
+import { PartialType } from '@nestjs/mapped-types';
+export class UpdateCourseDto extends PartialType(CreateCourseDto) {}
 
 // courses/courses.controller.ts
 @Post()
-create(@Body({ schema: createCourseSchema }) input: CreateCourseInput) {
-  return this.coursesService.create(input);
+create(@Body() dto: CreateCourseDto) {
+  return this.coursesService.create(dto);
 }
 
 @Get(':id')
-findOne(@Param('id', { schema: z.uuid() }) id: string) {
+findOne(@Param('id', ParseUUIDPipe) id: string) {
   return this.coursesService.findOne(id);
 }
 ```
 
-- Use `z.strictObject` to reject unknown keys. `z.object` silently strips them.
-- `@Query({ schema })` works too. Query values arrive as strings, so use `z.coerce.number()` and
-  similar for numbers.
-- A failed validation returns `400` with `message: string[]`, each entry prefixed by its path.
-  Check the shape v1 clients expect. If it differs, use the pipe's `exceptionFactory` option and
-  say so, because that changes the API contract.
-- Zod is not installed yet. Ask before adding it.
-- Docs: https://docs.nestjs.com/application/validation.md
+- One file per DTO in `<feature>/dto/<action>-<feature>.dto.ts`.
+- DTOs must be **classes**, imported with a normal `import`, never `import type`. The pipe reads the
+  parameter's type from decorator metadata at runtime; a type-only import (or an interface) erases
+  it and validation silently does nothing.
+- Every DTO property needs at least one decorator. `whitelist` + `forbidNonWhitelisted` reject any
+  property without one with `400 "property x should not exist"`.
+- `@IsOptional()` also lets `null` through. Use `@ValidateIf((_, v) => v !== undefined)` when `null`
+  must be rejected.
+- Nested objects need `@ValidateNested()` plus `@Type(() => ChildDto)` from `class-transformer`.
+  Arrays of DTOs in the body need `@Body(new ParseArrayPipe({ items: CreateCourseDto }))`.
+- Query values arrive as strings. In a query DTO, convert with `@Type(() => Number)` before
+  `@IsInt()`. For single values use `ParseIntPipe`, `ParseBoolPipe`, `ParseUUIDPipe`.
+- A failed validation returns `400` with `message: string[]` (e.g. `"code must be a string"`).
+  v1 returned `{ error: { message: "Validation failed", details: [{ path, message }] } }`
+  (see `../acadpath/backend/src/libs/appErr.ts`). To keep that contract, use the pipe's
+  `exceptionFactory` option plus an exception filter, and say so, because it changes the API shape.
+- Docs: https://docs.nestjs.com/application/validation.md, https://github.com/typestack/class-validator
 
 ### Guards and authorization
 
@@ -178,7 +190,7 @@ describe('CoursesController', () => {
 
 - GPA, credit totals, and prerequisite checks are deterministic code with unit tests, never LLM
   output.
-- Validate AI output with Zod. If a field is missing or invalid, store it as unknown or
+- Validate AI output against a class-validator DTO (`plainToInstance` + `validate`). If a field is missing or invalid, store it as unknown or
   needs-review. Never guess a value.
 - Keep provenance (source URL or document, extraction time, verification status) alongside the
   extracted data.

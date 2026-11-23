@@ -13,13 +13,14 @@ WORKDIR /app
 
 # ---- deps: all dependencies (for building) ----
 FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 # ---- dev: watch mode, used by docker-compose.dev.yml (Compose Watch syncs src/) ----
 FROM deps AS dev
 ENV NODE_ENV=development
 COPY --chown=node:node . .
+RUN pnpm prisma:generate
 # nest writes dist/ into /app, so the node user must own it
 RUN chown node:node /app
 USER node
@@ -34,7 +35,7 @@ RUN pnpm build
 
 # ---- prod-deps: runtime dependencies only ----
 FROM base AS prod-deps
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --prod
 
 # ---- runner ----

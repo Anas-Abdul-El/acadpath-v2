@@ -63,8 +63,11 @@ Do not claim checks pass unless you ran them.
     and exception filters
   - v1 `config/*.ts` + `env.ts` → `@nestjs/config` with validated env
   - v1 `express-rate-limit` → `@nestjs/throttler`
-- **Validation:** Zod with `StandardSchemaValidationPipe` (`@Body({ schema })`,
-  `@Param('id', { schema })`), as v1 used Zod. Infer types from schemas.
+- **Validation:** `class-validator` + `class-transformer` DTO classes, checked by the global
+  `ValidationPipe` registered in `src/app.setup.ts` (`whitelist`, `forbidNonWhitelisted`,
+  `transform`). Do not use Zod in the backend, even though v1 did. Reuse DTOs with `PartialType`,
+  `PickType`, and `OmitType` from `@nestjs/mapped-types`. E2E tests call `configureApp(app)` so
+  they run the same pipe.
 - **Prefer first-party `@nestjs/*` packages** listed in `backend/AGENTS.md` before adding another
   library or writing your own.
 - **Database:** PostgreSQL. The ORM is not chosen yet (v1 used Prisma 7 on Neon). Ask before
@@ -114,7 +117,8 @@ Do not claim checks pass unless you ran them.
 ## 8. AI and academic data
 
 - Keep AI provider calls in one service, with keys only on the server and model IDs in config.
-- Use structured output and validate it with Zod. Handle timeouts, rate limits, and malformed
+- Use structured output and validate it against a class-validator DTO (`plainToInstance` +
+  `validate`). Handle timeouts, rate limits, and malformed
   responses. Retry only transient failures, with backoff and a limit.
 - Never fill missing fields with guesses. Return an explicit unknown or needs-review state.
 - Keep provenance: source URLs, documents, extraction time, and verification status.
